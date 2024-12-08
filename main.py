@@ -113,7 +113,7 @@ async def create_answer(offer: Any) -> dict[str, Any]:
 def post_answer(answer: dict[str, Any]):
     requests.post(
         VIDEO_ANSWER_ENDPOINT,
-        json.dumps({"secret": VIDEO_ANSWER_SECRET, "answer": answer}),
+        json={"secret": VIDEO_ANSWER_SECRET, "answer": answer},
     )
 
 
@@ -127,7 +127,7 @@ try:
     print(f"Registering video source {VIDEO_SOURCE} to {BACKEND_BASE_URL}")
     response = requests.post(
         f"{BACKEND_BASE_URL}/register_video_source",
-        json.dumps({"secret": VIDEO_ANSWER_SECRET, "source": VIDEO_SOURCE}),
+        json={"secret": VIDEO_ANSWER_SECRET, "source": VIDEO_SOURCE},
     )
     if not response.ok:
         raise Exception(f"{response.status_code}")
