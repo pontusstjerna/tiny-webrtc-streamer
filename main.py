@@ -5,6 +5,7 @@ from paho.mqtt.properties import Properties
 import os
 from dotenv import load_dotenv
 from aiortc.rtcpeerconnection import RTCPeerConnection
+from aiortc.rtcsessiondescription import RTCSessionDescription
 from aiortc.mediastreams import MediaStreamTrack
 import requests
 import json
@@ -27,6 +28,7 @@ VIDEO_ANSWER_SECRET: str = os.getenv("VIDEO_ANSWER_SECRET") or ""
 
 has_picamera2 = False
 active_track: MediaStreamTrack | None = None
+pcs: set[Any] = set()
 
 
 try:
@@ -79,38 +81,42 @@ def on_message(
     if message.topic == f"/video/client_offers/{VIDEO_SOURCE}":
         print(f"Got video offer!")
         offer = json.loads(str_message)
-        answer = asyncio.run(create_answer(offer))
-        print(f"Returning video answer for source '{VIDEO_SOURCE}'")
-        post_answer(answer)
+        asyncio.create_task(create_answer(offer))
 
 
-async def create_answer(offer: Any) -> dict[str, Any]:
+async def create_answer(offer: dict[str, Any]):
     peer_connection: Any = RTCPeerConnection()
+    pcs.add(peer_connection)
 
     @peer_connection.on("connectionstatechange")
-    async def _():
+    async def on_connectionstate_change():
         print(f"Connection state is {peer_connection.connectionState}")
         if peer_connection.connectionState == "failed":
-            await peer_connection.close()
+            await peer_connection.close()  # type: ignore
+
+    peer_connection.add_listener("connectionstatechange", on_connectionstate_change)
 
     global active_track, cam
-    if has_picamera2:
-        active_track = PiCameraTrack(cam)  # type: ignore
-    else:
-        active_track = create_webcam_video_track()
+    if not active_track:
+        print(f"No track active, creating it!")
+        if has_picamera2:
+            active_track = PiCameraTrack(cam)  # type: ignore
+        else:
+            active_track = create_webcam_video_track()
 
     peer_connection.addTrack(active_track)
 
-    await peer_connection.setRemoteDescription(offer)
+    await peer_connection.setRemoteDescription(
+        RTCSessionDescription(sdp=offer["sdp"], type=offer["type"])
+    )
     answer = await peer_connection.createAnswer()
     await peer_connection.setLocalDescription(answer)
-    return {
+    answer = {
         "sdp": peer_connection.localDescription.sdp,
         "type": peer_connection.localDescription.type,
     }
 
-
-def post_answer(answer: dict[str, Any]):
+    print(f"Returning video answer for source '{VIDEO_SOURCE}'")
     requests.post(
         VIDEO_ANSWER_ENDPOINT,
         json={"secret": VIDEO_ANSWER_SECRET, "answer": answer},
@@ -131,8 +137,19 @@ try:
     )
     if not response.ok:
         raise Exception(f"{response.status_code}")
+    else:
+        print("Successfully registered video source.")
 except Exception as e:
     print(f"Failed to register video source: {e}")
     exit(-1)
 
-mqtt_client.loop_forever()
+
+async def start_main_loop():
+    while True:
+        mqtt_client.loop_read()
+        mqtt_client.loop_write()
+        mqtt_client.loop_misc()
+        await asyncio.sleep(0)
+
+
+asyncio.run(start_main_loop())
