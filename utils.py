@@ -7,7 +7,7 @@ from av.video.frame import VideoFrame
 import sys
 from fractions import Fraction
 from typing import Any, Iterator
-
+import asyncio
 import av.container
 
 
@@ -62,6 +62,8 @@ class PiCameraTrack(MediaStreamTrack):
 class WebcamStreamTrack(MediaStreamTrack):
     kind = "video"
     frame_iter: Iterator[VideoFrame]
+    frame = None
+    task = None
 
     def __init__(self):
         super().__init__()
@@ -71,15 +73,34 @@ class WebcamStreamTrack(MediaStreamTrack):
         container = av.container.open(
             "/dev/video0",
             format="v4l2",
-            options={"framerate": "30", "video_size": f"{size[0]}x{size[1]}"},
+            options={
+                "framerate": "5",
+                "video_size": f"{size[0]}x{size[1]}",
+                "hwaccel": "auto",
+                "preset": "ultrafast",
+                "pix_fmt": "yuv420p",
+                "c:v": "mpeg1video",
+            },
         )
         stream = container.streams.video[0]
         self.frame_iter = container.decode(stream)
 
-    async def recv(self):
-        frame = next(self.frame_iter)
+    async def get_frame(self):
+        for frame in self.frame_iter:
+            # frame = frame.reformat(width=160, height=120)
+            frame.time_base = time_base
+            self.frame = frame
+            await asyncio.sleep(0.001)
 
+    async def recv(self):
+        print("Getting frame!")
+        if not self.task:
+            self.task = asyncio.create_task(self.get_frame())
+
+        while self.frame == None:
+            await asyncio.sleep(0.01)
+
+        frame = self.frame
         pts = time.time() * 1000000
         frame.pts = int(pts)
-        frame.time_base = time_base
         return frame
