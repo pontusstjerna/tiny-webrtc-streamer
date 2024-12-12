@@ -3,9 +3,13 @@ from aiortc.mediastreams import MediaStreamTrack
 import platform
 import time
 import av
+from av.video.frame import VideoFrame
 import sys
 from fractions import Fraction
-from typing import Any
+from typing import Any, Iterator
+
+import av.container
+
 
 time_base = Fraction(1, 1000000)
 
@@ -18,7 +22,7 @@ def get_size():
     elif "--res=270p" in sys.argv:
         return (480, 270)
 
-    return (640, 360)
+    return (640, 480)
 
 
 def create_webcam_video_track() -> MediaStreamTrack:
@@ -32,7 +36,8 @@ def create_webcam_video_track() -> MediaStreamTrack:
             "video=Integrated Camera", format="dshow", options=options
         ).video
     else:
-        return MediaPlayer("/dev/video0", format="v4l2", options=options).video
+        return WebcamStreamTrack()
+        # return MediaPlayer("/dev/video0", format="v4l2", options=options).video
 
 
 class PiCameraTrack(MediaStreamTrack):
@@ -48,7 +53,33 @@ class PiCameraTrack(MediaStreamTrack):
         img = self.cam.capture_array("lores")  # type: ignore
 
         pts = time.time() * 1000000
-        new_frame = av.VideoFrame.from_ndarray(img, format="yuv420p")  # type: ignore
+        new_frame = VideoFrame.from_ndarray(img, format="yuv420p")  # type: ignore
         new_frame.pts = int(pts)
         new_frame.time_base = time_base
         return new_frame
+
+
+class WebcamStreamTrack(MediaStreamTrack):
+    kind = "video"
+    frame_iter: Iterator[VideoFrame]
+
+    def __init__(self):
+        super().__init__()
+
+        size = get_size()
+
+        container = av.container.open(
+            "/dev/video0",
+            format="v4l2",
+            options={"framerate": "30", "video_size": f"{size[0]}x{size[1]}"},
+        )
+        stream = container.streams.video[0]
+        self.frame_iter = container.decode(stream)
+
+    async def recv(self):
+        frame = next(self.frame_iter)
+
+        pts = time.time() * 1000000
+        frame.pts = int(pts)
+        frame.time_base = time_base
+        return frame
