@@ -1,0 +1,6 @@
+aiortc==1.5.0
+paho-mqtt
+python-dotenv
+requests
+pyav==11.0.1
+cryptography==42.0.0
