@@ -105,14 +105,7 @@ async def create_answer(offer: dict[str, Any]):
         else:
             active_track = create_webcam_video_track()
 
-    sender = peer_connection.addTrack(active_track)
-    codecs: Any = RTCRtpSender.getCapabilities("video").codecs  # type: ignore
-    transceiver = next(
-        t for t in peer_connection.getTransceivers() if t.sender == sender
-    )
-    transceiver.setCodecPreferences(
-        [codec for codec in codecs if codec.mimeType == "video/H264"]
-    )
+    peer_connection.addTrack(active_track)
 
     await peer_connection.setRemoteDescription(
         RTCSessionDescription(sdp=offer["sdp"], type=offer["type"])

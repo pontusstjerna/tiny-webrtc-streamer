@@ -21,6 +21,8 @@ def get_size():
         return (1280, 720)
     elif "--res=270p" in sys.argv:
         return (480, 270)
+    elif "--res=320p" in sys.argv:
+        return (320, 240)
 
     return (640, 480)
 
@@ -37,7 +39,6 @@ def create_webcam_video_track() -> MediaStreamTrack:
         ).video
     else:
         return WebcamStreamTrack()
-        # return MediaPlayer("/dev/video0", format="v4l2", options=options).video
 
 
 class PiCameraTrack(MediaStreamTrack):
@@ -77,9 +78,7 @@ class WebcamStreamTrack(MediaStreamTrack):
                 "framerate": "5",
                 "video_size": f"{size[0]}x{size[1]}",
                 "hwaccel": "auto",
-                "preset": "ultrafast",
                 "pix_fmt": "yuv420p",
-                "c:v": "mpeg1video",
             },
         )
         stream = container.streams.video[0]
