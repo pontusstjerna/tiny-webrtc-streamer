@@ -92,7 +92,6 @@ class WebcamStreamTrack(MediaStreamTrack):
             await asyncio.sleep(0.001)
 
     async def recv(self):
-        print("Getting frame!")
         if not self.task:
             self.task = asyncio.create_task(self.get_frame())
 

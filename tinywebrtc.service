@@ -1,0 +1,12 @@
+[Unit]
+Description=Tiny WebRTC streamer
+After=network.target
+
+[Service]
+Type=idle
+Restart=on-failure
+User=root
+ExecStart=/home/pi/tiny-webrtc-streamer/.venv/bin/python /home/pi/tiny-webrtc-streamer/main.py
+
+[Install]
+WantedBy=multi-user.target
