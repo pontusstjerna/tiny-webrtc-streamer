@@ -6,6 +6,7 @@ After=network.target
 Type=idle
 Restart=on-failure
 User=root
+EnvironmentFile=/home/pi/tiny-webrtc-streamer/.env
 ExecStart=/home/pi/tiny-webrtc-streamer/.venv/bin/python /home/pi/tiny-webrtc-streamer/main.py
 
 [Install]
