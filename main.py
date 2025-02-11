@@ -6,7 +6,6 @@ import os
 from dotenv import load_dotenv
 from aiortc.rtcpeerconnection import RTCPeerConnection
 from aiortc.rtcsessiondescription import RTCSessionDescription
-from aiortc.rtcrtpsender import RTCRtpSender
 from aiortc.mediastreams import MediaStreamTrack
 import requests
 import json
@@ -19,6 +18,11 @@ import asyncio
 
 load_dotenv()
 
+# import logging
+# logging.getLogger("aiortc").propagate = True
+# logging.getLogger("aiortc").setLevel(logging.DEBUG)
+# logging.getLogger("aiortc").addHandler(logging.StreamHandler())
+
 MQTT_BROKER_URL: str = os.getenv("MQTT_BROKER_URL") or ""
 MQTT_USER: str = os.getenv("MQTT_USER") or ""
 MQTT_PASSWORD: str = os.getenv("MQTT_PASSWORD") or ""
@@ -30,7 +34,6 @@ VIDEO_ANSWER_SECRET: str = os.getenv("VIDEO_ANSWER_SECRET") or ""
 has_picamera2 = False
 active_track: MediaStreamTrack | None = None
 pcs: set[Any] = set()
-
 
 try:
     from picamera2 import Picamera2  # type: ignore
@@ -72,6 +75,7 @@ def on_connect(
 ):
     print(f"Subscribed to MQTT at {MQTT_BROKER_URL}")
     client.subscribe("$$SYS/#")
+    client.subscribe("/video/reregister")
     client.subscribe(f"/video/client_offers/{VIDEO_SOURCE}")
 
 
@@ -84,9 +88,13 @@ def on_message(
         offer = json.loads(str_message)
         asyncio.create_task(create_answer(offer))
 
+    if message.topic == "/video/reregister":
+        register_video_source()
+
 
 async def create_answer(offer: dict[str, Any]):
     peer_connection: Any = RTCPeerConnection()
+
     pcs.add(peer_connection)
 
     @peer_connection.on("connectionstatechange")
@@ -130,19 +138,24 @@ mqtt_client.connect(MQTT_BROKER_URL)
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
 
-try:
-    print(f"Registering video source {VIDEO_SOURCE} to {BACKEND_BASE_URL}")
-    response = requests.post(
-        f"{BACKEND_BASE_URL}/register_video_source",
-        json={"secret": VIDEO_ANSWER_SECRET, "source": VIDEO_SOURCE},
-    )
-    if not response.ok:
-        raise Exception(f"{response.status_code}")
-    else:
-        print("Successfully registered video source.")
-except Exception as e:
-    print(f"Failed to register video source: {e}")
-    exit(-1)
+
+def register_video_source():
+    try:
+        print(f"Registering video source {VIDEO_SOURCE} to {BACKEND_BASE_URL}")
+        response = requests.post(
+            f"{BACKEND_BASE_URL}/register_video_source",
+            json={"secret": VIDEO_ANSWER_SECRET, "source": VIDEO_SOURCE},
+        )
+        if not response.ok:
+            raise Exception(f"{response.status_code}")
+        else:
+            print("Successfully registered video source.")
+    except Exception as e:
+        print(f"Failed to register video source: {e}")
+        exit(-1)
+
+
+register_video_source()
 
 
 async def start_main_loop():
